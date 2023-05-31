@@ -12,8 +12,8 @@ from tqdm.auto import tqdm
 from haystack.environment import HAYSTACK_REMOTE_API_TIMEOUT_SEC
 from haystack.nodes.retriever._base_embedding_encoder import _BaseEmbeddingEncoder
 from haystack.schema import Document
-from haystack.utils.openai_utils import load_openai_tokenizer, openai_request
 from haystack.telemetry import send_event
+from haystack.utils.openai_utils import load_openai_tokenizer, openai_request
 
 if TYPE_CHECKING:
     from haystack.nodes.retriever import EmbeddingRetriever
@@ -137,8 +137,13 @@ class _OpenAIEmbeddingEncoder(_BaseEmbeddingEncoder):
     def embed_queries(self, queries: List[str]) -> np.ndarray:
         return self.embed_batch(self.query_encoder_model, queries)
 
-    def embed_documents(self, docs: List[Document]) -> np.ndarray:
-        return self.embed_batch(self.doc_encoder_model, [d.content for d in docs])
+    def embed_documents(self, docs: List[Document], field_to_embed: str = None) -> np.ndarray:
+        passages = []
+        if field_to_embed and field_to_embed != "content":
+            passages = [d.meta[field_to_embed] for d in docs]
+        else:
+            passages = [d.content for d in docs]
+        return self.embed_batch(self.doc_encoder_model, passages)
 
     def train(
         self,

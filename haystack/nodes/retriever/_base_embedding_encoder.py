@@ -23,7 +23,7 @@ class _BaseEmbeddingEncoder:
         pass
 
     @abstractmethod
-    def embed_documents(self, docs: List[Document]) -> np.ndarray:
+    def embed_documents(self, docs: List[Document], field_to_embed: str = None) -> np.ndarray:
         """
         Create embeddings for a list of documents.
 

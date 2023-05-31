@@ -1,13 +1,12 @@
-from typing import List, Optional, Union, Dict, Any
-
 import logging
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
+from tenacity import retry, retry_if_not_result, wait_exponential
 from tqdm.auto import tqdm
-from tenacity import retry, wait_exponential, retry_if_not_result
 
 try:
-    from opensearchpy import OpenSearch, Urllib3HttpConnection, RequestsHttpConnection, NotFoundError, RequestError
+    from opensearchpy import NotFoundError, OpenSearch, RequestError, RequestsHttpConnection, Urllib3HttpConnection
     from opensearchpy.helpers import bulk, scan
 except (ImportError, ModuleNotFoundError) as e:
     from haystack.utils.import_utils import _optional_component_not_installed
@@ -15,11 +14,11 @@ except (ImportError, ModuleNotFoundError) as e:
     _optional_component_not_installed(__name__, "opensearch", e)
 
 
-from haystack.schema import Document, FilterType
 from haystack.document_stores.base import get_batches_from_generator
 from haystack.document_stores.filter_utils import LogicalFilterClause
 from haystack.errors import DocumentStoreError
 from haystack.nodes.retriever import DenseRetriever
+from haystack.schema import Document, FilterType
 
 from .search_engine import SearchEngineDocumentStore, prepare_hosts
 

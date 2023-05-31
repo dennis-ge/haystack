@@ -2,13 +2,13 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union, Literal
-from tenacity import retry, retry_if_exception_type, wait_exponential, stop_after_attempt
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Union
 
 import numpy as np
 import requests
 import torch
 from sentence_transformers import InputExample
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SequentialSampler
 from tqdm.auto import tqdm
@@ -77,14 +77,20 @@ class _DefaultEmbeddingEncoder(_BaseEmbeddingEncoder):
         """
         return self.embed(queries)
 
-    def embed_documents(self, docs: List[Document]) -> np.ndarray:
+    def embed_documents(self, docs: List[Document], field_to_embed: str = None) -> np.ndarray:
         """
         Create embeddings for a list of documents.
 
         :param docs: List of documents to embed.
+        :param field_to_embed: Name of the document field that should be embedded.
+            If None, the 'content' field of the document will be used.
         :return: Embeddings, one per input document, shape: (documents, embedding_dim)
         """
-        passages = [d.content for d in docs]
+        passages = []
+        if field_to_embed and field_to_embed != "content":
+            passages = [d.meta[field_to_embed] for d in docs]
+        else:
+            passages = [d.content for d in docs]
         return self.embed(passages)
 
     def train(
@@ -148,14 +154,20 @@ class _SentenceTransformersEmbeddingEncoder(_BaseEmbeddingEncoder):
         """
         return self.embed(queries)
 
-    def embed_documents(self, docs: List[Document]) -> np.ndarray:
+    def embed_documents(self, docs: List[Document], field_to_embed: str = None) -> np.ndarray:
         """
         Create embeddings for a list of documents.
 
         :param docs: List of documents to embed.
+        :param field_to_embed: Name of the document field that should be embedded.
+                If None, the 'content' field of the document will be used.
         :return: Embeddings, one per input document, shape: (documents, embedding_dim)
         """
-        passages = [d.content for d in docs]
+        passages = []
+        if field_to_embed and field_to_embed != "content":
+            passages = [d.meta[field_to_embed] for d in docs]
+        else:
+            passages = [d.content for d in docs]
         return self.embed(passages)
 
     def train(
@@ -282,14 +294,20 @@ class _RetribertEmbeddingEncoder(_BaseEmbeddingEncoder):
 
         return np.concatenate(embeddings)
 
-    def embed_documents(self, docs: List[Document]) -> np.ndarray:
+    def embed_documents(self, docs: List[Document], field_to_embed: str = None) -> np.ndarray:
         """
         Create embeddings for a list of documents.
 
         :param docs: List of documents to embed.
+        :param field_to_embed: Name of the document field that should be embedded.
+                If None, the 'content' field of the document will be used.
         :return: Embeddings, one per input document, shape: (documents, embedding_dim)
         """
-        doc_text = [{"text": d.content} for d in docs]
+        doc_text = []
+        if field_to_embed and field_to_embed != "content":
+            doc_text = [{"text": d.meta[field_to_embed]} for d in docs]
+        else:
+            doc_text = [{"text": d.content} for d in docs]
         dataloader = self._create_dataloader(doc_text)
 
         embeddings: List[np.ndarray] = []
@@ -405,8 +423,14 @@ class _CohereEmbeddingEncoder(_BaseEmbeddingEncoder):
     def embed_queries(self, queries: List[str]) -> np.ndarray:
         return self.embed_batch(queries)
 
-    def embed_documents(self, docs: List[Document]) -> np.ndarray:
-        return self.embed_batch([d.content for d in docs])
+    def embed_documents(self, docs: List[Document], field_to_embed: str = None) -> np.ndarray:
+        passages = []
+        if field_to_embed and field_to_embed != "content":
+            passages = [d.meta[field_to_embed] for d in docs]
+        else:
+            passages = [d.content for d in docs]
+
+        return self.embed_batch(passages)
 
     def train(
         self,

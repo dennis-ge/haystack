@@ -1,39 +1,39 @@
-from abc import abstractmethod
-from typing import List, Dict, Union, Optional, Any, Literal
-
 import logging
-from pathlib import Path
+from abc import abstractmethod
 from copy import deepcopy
-from requests.exceptions import HTTPError
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import numpy as np
-from tqdm.auto import tqdm
-
+import pandas as pd
 import torch
+from huggingface_hub import hf_hub_download
+from requests.exceptions import HTTPError
 from torch.nn import DataParallel
 from torch.utils.data.sampler import SequentialSampler
-import pandas as pd
-from huggingface_hub import hf_hub_download
+from tqdm.auto import tqdm
 from transformers import AutoConfig, AutoTokenizer
 
-from haystack.errors import HaystackError
-from haystack.schema import Document, FilterType
 from haystack.document_stores import BaseDocumentStore
-from haystack.nodes.retriever.base import BaseRetriever
-from haystack.nodes.retriever._embedding_encoder import _EMBEDDING_ENCODERS
-from haystack.utils.early_stopping import EarlyStopping
-from haystack.modeling.model.language_model import get_language_model, DPREncoder
-from haystack.modeling.model.biadaptive_model import BiAdaptiveModel
-from haystack.modeling.model.triadaptive_model import TriAdaptiveModel
-from haystack.modeling.model.prediction_head import TextSimilarityHead
-from haystack.modeling.data_handler.processor import TextSimilarityProcessor, TableTextSimilarityProcessor
+from haystack.errors import HaystackError
 from haystack.modeling.data_handler.data_silo import DataSilo
 from haystack.modeling.data_handler.dataloader import NamedDataLoader
+from haystack.modeling.data_handler.processor import (
+    TableTextSimilarityProcessor,
+    TextSimilarityProcessor,
+)
+from haystack.modeling.model.biadaptive_model import BiAdaptiveModel
+from haystack.modeling.model.language_model import DPREncoder, get_language_model
 from haystack.modeling.model.optimization import initialize_optimizer
+from haystack.modeling.model.prediction_head import TextSimilarityHead
+from haystack.modeling.model.triadaptive_model import TriAdaptiveModel
 from haystack.modeling.training.base import Trainer
 from haystack.modeling.utils import initialize_device_settings
+from haystack.nodes.retriever._embedding_encoder import _EMBEDDING_ENCODERS
+from haystack.nodes.retriever.base import BaseRetriever
+from haystack.schema import Document, FilterType
 from haystack.telemetry import send_event
-
+from haystack.utils.early_stopping import EarlyStopping
 
 logger = logging.getLogger(__name__)
 
@@ -1449,6 +1449,7 @@ class EmbeddingRetriever(DenseRetriever):
         use_auth_token: Optional[Union[str, bool]] = None,
         scale_score: bool = True,
         embed_meta_fields: Optional[List[str]] = None,
+        field_to_embed: Optional[str] = None,
         api_key: Optional[str] = None,
         azure_api_version: str = "2022-12-01",
         azure_base_url: Optional[str] = None,
@@ -1505,6 +1506,8 @@ class EmbeddingRetriever(DenseRetriever):
                                   performance if your titles contain meaningful information for retrieval
                                   (topic, entities etc.).
                                   If no value is provided, a default empty list will be created.
+        :param field_to_embed: The field of the document to embed. If not provided, the text field of the document will be used. 
+                                If provided, the field must be a key in the document's meta dictionary.
         :param api_key: The OpenAI API key or the Cohere API key. Required if one wants to use OpenAI/Cohere embeddings.
                         For more details see https://beta.openai.com/account/api-keys and https://dashboard.cohere.ai/api-keys
         :param api_version: The version of the Azure OpenAI API to use. The default is `2022-12-01` version.
@@ -1524,6 +1527,7 @@ class EmbeddingRetriever(DenseRetriever):
 
         self.document_store = document_store
         self.embedding_model = embedding_model
+        self.field_to_embed = field_to_embed
         self.model_version = model_version
         self.use_gpu = use_gpu
         self.batch_size = batch_size
@@ -1816,7 +1820,7 @@ class EmbeddingRetriever(DenseRetriever):
         :return: Embeddings, one per input document, shape: (docs, embedding_dim)
         """
         documents = self._preprocess_documents(documents)
-        return self.embedding_encoder.embed_documents(documents)
+        return self.embedding_encoder.embed_documents(documents, self.field_to_embed)
 
     def _preprocess_documents(self, docs: List[Document]) -> List[Document]:
         """
